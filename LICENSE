@@ -1,201 +1,443 @@
-                                 Apache License
-                           Version 2.0, January 2004
-                        http://www.apache.org/licenses/
+"""
+AuditChain service layer: append-only hash-chained audit log persistence and querying.
 
-   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+The AuditChain is append-only and hash-chained. Every write is synchronous —
+there is no async option for audit logging.
 
-   1. Definitions.
+Architecture:
+    - AuditChainModel: one row per logical audit session (per mission)
+    - AuditEntryModel: detail rows linked by chain_id
+    - Both tables maintain independent SHA-256 hash chains
+"""
+from __future__ import annotations
 
-      "License" shall mean the terms and conditions for use, reproduction,
-      and distribution as defined by Sections 1 through 9 of this document.
+import hashlib
+import json
+from datetime import datetime, timezone
+from typing import Any
 
-      "Licensor" shall mean the copyright owner or entity authorized by
-      the copyright owner that is granting the License.
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
 
-      "Legal Entity" shall mean the union of the acting entity and all
-      other entities that control, are controlled by, or are under common
-      control with that entity. For the purposes of this definition,
-      "control" means (i) the power, direct or indirect, to cause the
-      direction or management of such entity, whether by contract or
-      otherwise, or (ii) ownership of fifty percent (50%) or more of the
-      outstanding shares, or (iii) beneficial ownership of such entity.
+from orgkernel.models import AuditChainModel, AuditEntryModel
+from orgkernel.schemas.audit_chain import (
+    AuditChain,
+    AuditEntry,
+    AuditLayer,
+)
 
-      "You" (or "Your") shall mean an individual or Legal Entity
-      exercising permissions granted by this License.
 
-      "Source" form shall mean the preferred form for making modifications,
-      including but not limited to software source code, documentation
-      source, and configuration files.
+_GENESIS_HASH = "0" * 64
 
-      "Object" form shall mean any form resulting from mechanical
-      transformation or translation of a Source form, including but
-      not limited to compiled object code, generated documentation,
-      and conversions to other media types.
 
-      "Work" shall mean the work of authorship, whether in Source or
-      Object form, made available under the License, as indicated by a
-      copyright notice that is included in or attached to the work
-      (an example is provided in the Appendix below).
+def _serialize_json(v: dict[str, Any] | list | None) -> str | None:
+    if v is None:
+        return None
+    return json.dumps(v, separators=(",", ":"), ensure_ascii=False)
 
-      "Derivative Works" shall mean any work, whether in Source or Object
-      form, that is based on (or derived from) the Work and for which the
-      editorial revisions, annotations, elaborations, or other modifications
-      represent, as a whole, an original work of authorship. For the purposes
-      of this License, Derivative Works shall not include works that remain
-      separable from, or merely link (or bind by name) to the interfaces of,
-      the Work and Derivative Works thereof.
 
-      "Contribution" shall mean any work of authorship, including
-      the original version of the Work and any modifications or additions
-      to that Work or Derivative Works thereof, that is intentionally
-      submitted to Licensor for inclusion in the Work by the copyright owner
-      or by an individual or Legal Entity authorized to submit on behalf of
-      the copyright owner. For the purposes of this definition, "submitted"
-      means any form of electronic, verbal, or written communication sent
-      to the Licensor or its representatives, including but not limited to
-      communication on electronic mailing lists, source code control systems,
-      and issue tracking systems that are managed by, or on behalf of, the
-      Licensor for the purpose of discussing and improving the Work, but
-      excluding communication that is conspicuously marked or otherwise
-      designated in writing by the copyright owner as "Not a Contribution."
+def _deserialize_json(v: str | None) -> dict[str, Any] | list | None:
+    if v is None:
+        return None
+    return json.loads(v)
 
-      "Contributor" shall mean Licensor and any individual or Legal Entity
-      on behalf of whom a Contribution has been received by Licensor and
-      subsequently incorporated within the Work.
 
-   2. Grant of Copyright License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      copyright license to reproduce, prepare Derivative Works of,
-      publicly display, publicly perform, sublicense, and distribute the
-      Work and such Derivative Works in Source or Object form.
+def _model_entry_to_pydantic(model: AuditEntryModel) -> AuditEntry:
+    """Convert SQLAlchemy AuditEntryModel to Pydantic AuditEntry."""
+    return AuditEntry(
+        entry_id=model.entry_id,
+        chain_id=model.chain_id,
+        sequence=model.sequence,
+        layer=AuditLayer(model.layer),
+        event=model.event,
+        agent_id=model.agent_id,
+        mission_id=model.mission_id,
+        token_id=model.token_id,
+        timestamp=model.timestamp,
+        data=_deserialize_json(model.data_json) or {},
+        prev_hash=model.prev_hash,
+        entry_hash=model.entry_hash,
+    )
 
-   3. Grant of Patent License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      (except as stated in this section) patent license to make, have made,
-      use, offer to sell, sell, import, and otherwise transfer the Work,
-      where such license applies only to those patent claims licensable
-      by such Contributor that are necessarily infringed by their
-      Contribution(s) alone or by combination of their Contribution(s)
-      with the Work to which such Contribution(s) was submitted. If You
-      institute patent litigation against any entity (including a
-      cross-claim or counterclaim in a lawsuit) alleging that the Work
-      or a Contribution incorporated within the Work constitutes direct
-      or contributory patent infringement, then any patent licenses
-      granted to You under this License for that Work shall terminate
-      as of the date such litigation is filed.
 
-   4. Redistribution. You may reproduce and distribute copies of the
-      Work or Derivative Works thereof in any medium, with or without
-      modifications, and in Source or Object form, provided that You
-      meet the following conditions:
+def _model_chain_to_pydantic(
+    chain_model: AuditChainModel,
+    entries: list[AuditEntryModel],
+) -> AuditChain:
+    """Convert SQLAlchemy models to Pydantic AuditChain with entries."""
+    chain = AuditChain(
+        chain_id=chain_model.chain_id,
+        mission_id=chain_model.mission_id,
+        agent_id=chain_model.agent_id,
+        initialized_at=chain_model.initialized_at,
+        closed_at=chain_model.closed_at,
+        entries=[],
+        head_hash=chain_model.head_hash,
+    )
+    # Rebuild entries
+    for em in sorted(entries, key=lambda x: x.sequence):
+        chain.entries.append(_model_entry_to_pydantic(em))
+    return chain
 
-      (a) You must give any other recipients of the Work or
-          Derivative Works a copy of this License; and
 
-      (b) You must cause any modified files to carry prominent notices
-          stating that You changed the files; and
+def _compute_entry_hash(entry: AuditEntry) -> str:
+    """Compute SHA-256 hash for an AuditEntry (excluding entry_hash itself)."""
+    d = entry.model_dump(mode="json", exclude={"entry_hash"})
+    canonical = json.dumps(d, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
-      (c) You must retain, in the Source form of any Derivative Works
-          that You distribute, all copyright, patent, trademark, and
-          attribution notices from the Source form of the Work,
-          excluding those notices that do not pertain to any part of
-          the Derivative Works; and
 
-      (d) If the Work includes a "NOTICE" text file as part of its
-          distribution, then any Derivative Works that You distribute must
-          include a readable copy of the attribution notices contained
-          within such NOTICE file, excluding those notices that do not
-          pertain to any part of the Derivative Works, in at least one
-          of the following places: within a NOTICE text file distributed
-          as part of the Derivative Works; within the Source form or
-          documentation, if provided along with the Derivative Works; or,
-          within a display generated by the Derivative Works, if and
-          wherever such third-party notices normally appear. The contents
-          of the NOTICE file are for informational purposes only and
-          do not modify the License. You may add Your own attribution
-          notices within Derivative Works that You distribute, alongside
-          or as an addendum to the NOTICE text from the Work, provided
-          that such additional attribution notices cannot be construed
-          as modifying the License.
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
 
-      You may add Your own copyright statement to Your modifications and
-      may provide additional or different license terms and conditions
-      for use, reproduction, or distribution of Your modifications, or
-      for any such Derivative Works as a whole, provided Your use,
-      reproduction, and distribution of the Work otherwise complies with
-      the conditions stated in this License.
 
-   5. Submission of Contributions. Unless You explicitly state otherwise,
-      any Contribution intentionally submitted for inclusion in the Work
-      by You to the Licensor shall be under the terms and conditions of
-      this License, without any additional terms or conditions.
-      Notwithstanding the above, nothing herein shall supersede or modify
-      the terms of any separate license agreement you may have executed
-      with Licensor regarding such Contributions.
+class AuditChainService:
+    """
+    Service for AuditChain persistence and querying.
 
-   6. Trademarks. This License does not grant permission to use the trade
-      names, trademarks, service marks, or product names of the Licensor,
-      except as required for reasonable and customary use in describing the
-      origin of the Work and reproducing the content of the NOTICE file.
+    All public methods are async and require an ``AsyncSession`` as the
+    first positional argument so the caller controls transaction boundaries.
 
-   7. Disclaimer of Warranty. Unless required by applicable law or
-      agreed to in writing, Licensor provides the Work (and each
-      Contributor provides its Contributions) on an "AS IS" BASIS,
-      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-      implied, including, without limitation, any warranties or conditions
-      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
-      PARTICULAR PURPOSE. You are solely responsible for determining the
-      appropriateness of using or redistributing the Work and assume any
-      risks associated with Your exercise of permissions under this License.
+    Usage::
 
-   8. Limitation of Liability. In no event and under no legal theory,
-      whether in tort (including negligence), contract, or otherwise,
-      unless required by applicable law (such as deliberate and grossly
-      negligent acts) or agreed to in writing, shall any Contributor be
-      liable to You for damages, including any direct, indirect, special,
-      incidental, or consequential damages of any character arising as a
-      result of this License or out of the use or inability to use the
-      Work (including but not limited to damages for loss of goodwill,
-      work stoppage, computer failure or malfunction, or any and all
-      other commercial damages or losses), even if such Contributor
-      has been advised of the possibility of such damages.
+        svc = AuditChainService()
+        chain_id = await svc.initialize(db, mission_id="msn_...", agent_id="aid_...")
+        await svc.append(db, chain_id=chain_id, layer=AuditLayer.EXECUTION, event="EXECUTION_tool_call", ...)
+        chain = await svc.get_by_mission(db, "msn_...")
+        valid = await svc.verify_integrity(db, chain_id)
+    """
 
-   9. Accepting Warranty or Additional Liability. While redistributing
-      the Work or Derivative Works thereof, You may choose to offer,
-      and charge a fee for, acceptance of support, warranty, indemnity,
-      or other liability obligations and/or rights consistent with this
-      License. However, in accepting such obligations, You may act only
-      on Your own behalf and on Your sole responsibility, not on behalf
-      of any other Contributor, and only if You agree to indemnify,
-      defend, and hold each Contributor harmless for any liability
-      incurred by, or claims asserted against, such Contributor by reason
-      of your accepting any such warranty or additional liability.
+    async def initialize(
+        self,
+        db: AsyncSession,
+        mission_id: str,
+        agent_id: str,
+    ) -> str:
+        """
+        Create a new AuditChain and write the genesis IDENTITY entry.
 
-   END OF TERMS AND CONDITIONS
+        Args:
+            db: AsyncSession.
+            mission_id: Mission this chain belongs to.
+            agent_id: Agent that owns this chain.
 
-   APPENDIX: How to apply the Apache License to your work.
+        Returns:
+            The chain_id of the newly created chain.
+        """
+        # Create chain header
+        chain_id = "ac_" + _new_id()
+        initialized_at = _now_utc()
 
-      To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "[]"
-      replaced with your own identifying information. (Don't include
-      the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. We also recommend that a
-      file or class name and description of purpose be included on the
-      same "printed page" as the copyright notice for easier
-      identification within third-party archives.
+        chain_model = AuditChainModel(
+            chain_id=chain_id,
+            mission_id=mission_id,
+            agent_id=agent_id,
+            initialized_at=initialized_at,
+        )
+        db.add(chain_model)
 
-   Copyright [yyyy] [name of copyright owner]
+        # Compute genesis entry
+        genesis_entry = AuditEntry(
+            chain_id=chain_id,
+            sequence=0,
+            layer=AuditLayer.IDENTITY,
+            event="IDENTITY_chain_initialized",
+            agent_id=agent_id,
+            mission_id=mission_id,
+            prev_hash=_GENESIS_HASH,
+            data={"initialized_at": initialized_at.isoformat()},
+            entry_hash="",  # placeholder
+        )
+        genesis_hash = _compute_entry_hash(genesis_entry)
+        genesis_entry.entry_hash = genesis_hash
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+        # Update chain head_hash
+        chain_model.head_hash = genesis_hash
 
-       http://www.apache.org/licenses/LICENSE-2.0
+        entry_model = AuditEntryModel(
+            entry_id=genesis_entry.entry_id,
+            chain_id=genesis_entry.chain_id,
+            sequence=genesis_entry.sequence,
+            layer=genesis_entry.layer.value,
+            event=genesis_entry.event,
+            agent_id=genesis_entry.agent_id,
+            mission_id=genesis_entry.mission_id,
+            token_id=genesis_entry.token_id,
+            timestamp=genesis_entry.timestamp,
+            data_json=_serialize_json(genesis_entry.data),
+            prev_hash=genesis_entry.prev_hash,
+            entry_hash=genesis_entry.entry_hash,
+        )
+        db.add(entry_model)
+        await db.flush()
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+        return chain_id
+
+    async def append(
+        self,
+        db: AsyncSession,
+        chain_id: str,
+        layer: AuditLayer,
+        event: str,
+        agent_id: str,
+        mission_id: str,
+        data: dict[str, Any] | None = None,
+        token_id: str | None = None,
+    ) -> AuditEntry:
+        """
+        Append a new entry to an existing AuditChain.
+
+        Args:
+            db: AsyncSession.
+            chain_id: Chain to append to.
+            layer: Audit layer (IDENTITY, EXECUTION, COMPLIANCE, GOVERNANCE).
+            event: Event identifier, format: LAYER_EventName.
+            agent_id: Agent producing this entry.
+            mission_id: Mission this entry belongs to.
+            data: Optional structured data payload.
+            token_id: Optional ExecutionToken active at this entry.
+
+        Returns:
+            The created AuditEntry.
+
+        Raises:
+            ValueError: If chain is closed or not found.
+        """
+        # Fetch chain
+        result = await db.execute(
+            select(AuditChainModel).where(AuditChainModel.chain_id == chain_id)
+        )
+        chain_model = result.scalars().first()
+        if chain_model is None:
+            raise ValueError(f"AuditChain not found: {chain_id}")
+        if chain_model.closed_at is not None:
+            raise ValueError("Cannot append to a closed AuditChain.")
+
+        # Compute next sequence
+        seq_result = await db.execute(
+            select(func.count(AuditEntryModel.entry_id))
+            .where(AuditEntryModel.chain_id == chain_id)
+        )
+        sequence: int = seq_result.scalar() or 0
+
+        # Create entry
+        prev_hash = chain_model.head_hash or _GENESIS_HASH
+        entry = AuditEntry(
+            chain_id=chain_id,
+            sequence=sequence,
+            layer=layer,
+            event=event,
+            agent_id=agent_id,
+            mission_id=mission_id,
+            token_id=token_id,
+            data=data or {},
+            prev_hash=prev_hash,
+            entry_hash="",
+        )
+        entry_hash = _compute_entry_hash(entry)
+        entry.entry_hash = entry_hash
+
+        # Persist entry
+        entry_model = AuditEntryModel(
+            entry_id=entry.entry_id,
+            chain_id=entry.chain_id,
+            sequence=entry.sequence,
+            layer=entry.layer.value,
+            event=entry.event,
+            agent_id=entry.agent_id,
+            mission_id=entry.mission_id,
+            token_id=entry.token_id,
+            timestamp=entry.timestamp,
+            data_json=_serialize_json(entry.data),
+            prev_hash=entry.prev_hash,
+            entry_hash=entry.entry_hash,
+        )
+        db.add(entry_model)
+
+        # Update chain head_hash
+        chain_model.head_hash = entry_hash
+
+        await db.flush()
+        return entry
+
+    async def close(self, db: AsyncSession, chain_id: str) -> AuditChain:
+        """
+        Close an AuditChain and write the terminal entry.
+
+        Args:
+            db: AsyncSession.
+            chain_id: Chain to close.
+
+        Returns:
+            The closed AuditChain with all entries.
+
+        Raises:
+            ValueError: If chain is already closed or not found.
+        """
+        result = await db.execute(
+            select(AuditChainModel).where(AuditChainModel.chain_id == chain_id)
+        )
+        chain_model = result.scalars().first()
+        if chain_model is None:
+            raise ValueError(f"AuditChain not found: {chain_id}")
+
+        if chain_model.closed_at is not None:
+            raise ValueError("AuditChain is already closed.")
+
+        # Append terminal entry
+        await self.append(
+            db=db,
+            chain_id=chain_id,
+            layer=AuditLayer.EXECUTION,
+            event="EXECUTION_chain_closed",
+            agent_id=chain_model.agent_id,
+            mission_id=chain_model.mission_id,
+            data={"chain_id": chain_id},
+        )
+
+        # Mark chain as closed
+        chain_model.closed_at = _now_utc()
+        await db.flush()
+
+        # Return full chain
+        return await self.get_by_chain_id(db, chain_id)
+
+    async def get_by_chain_id(self, db: AsyncSession, chain_id: str) -> AuditChain | None:
+        """Get a full AuditChain by chain_id."""
+        result = await db.execute(
+            select(AuditChainModel).where(AuditChainModel.chain_id == chain_id)
+        )
+        chain_model = result.scalars().first()
+        if chain_model is None:
+            return None
+
+        entries_result = await db.execute(
+            select(AuditEntryModel).where(AuditEntryModel.chain_id == chain_id)
+        )
+        entries = list(entries_result.scalars().all())
+
+        return _model_chain_to_pydantic(chain_model, entries)
+
+    async def get_by_mission(self, db: AsyncSession, mission_id: str) -> AuditChain | None:
+        """Get an AuditChain by mission_id (one chain per mission)."""
+        result = await db.execute(
+            select(AuditChainModel).where(AuditChainModel.mission_id == mission_id)
+        )
+        chain_model = result.scalars().first()
+        if chain_model is None:
+            return None
+
+        entries_result = await db.execute(
+            select(AuditEntryModel).where(AuditEntryModel.chain_id == chain_model.chain_id)
+        )
+        entries = list(entries_result.scalars().all())
+
+        return _model_chain_to_pydantic(chain_model, entries)
+
+    async def verify_integrity(self, db: AsyncSession, chain_id: str) -> bool:
+        """
+        Verify the integrity of an AuditChain from the database.
+
+        Checks:
+            1. Each entry's entry_hash is consistent with its content.
+            2. Each entry's prev_hash matches the previous entry's entry_hash.
+            3. Sequence numbers are contiguous.
+            4. head_hash matches the last entry's entry_hash.
+
+        Args:
+            db: AsyncSession.
+            chain_id: Chain to verify.
+
+        Returns:
+            True if integrity check passes, False otherwise.
+        """
+        result = await db.execute(
+            select(AuditChainModel).where(AuditChainModel.chain_id == chain_id)
+        )
+        chain_model = result.scalars().first()
+        if chain_model is None:
+            return False
+
+        entries_result = await db.execute(
+            select(AuditEntryModel)
+            .where(AuditEntryModel.chain_id == chain_id)
+            .order_by(AuditEntryModel.sequence)
+        )
+        entries = list(entries_result.scalars().all())
+
+        if not entries:
+            return True
+
+        prev_hash = _GENESIS_HASH
+        for i, entry_model in enumerate(entries):
+            if entry_model.sequence != i:
+                return False
+            if entry_model.prev_hash != prev_hash:
+                return False
+            # Recompute entry hash
+            pydantic_entry = _model_entry_to_pydantic(entry_model)
+            recomputed = _compute_entry_hash(pydantic_entry)
+            if recomputed != entry_model.entry_hash:
+                return False
+            prev_hash = entry_model.entry_hash
+
+        return chain_model.head_hash == entries[-1].entry_hash
+
+    async def list_by_agent(
+        self,
+        db: AsyncSession,
+        agent_id: str,
+        page_no: int = 1,
+        page_size: int = 20,
+    ) -> dict:
+        """
+        List AuditChains for an agent with SQL-level pagination.
+
+        Args:
+            db: AsyncSession.
+            agent_id: Agent identifier.
+            page_no: 1-based page number.
+            page_size: Items per page.
+
+        Returns:
+            Dict with page_no, page_size, total, has_next, items (chain metadata only).
+        """
+        conditions = [AuditChainModel.agent_id == agent_id]
+
+        count_sql = select(func.count(AuditChainModel.chain_id)).where(*conditions)
+        total_result = await db.execute(count_sql)
+        total = total_result.scalar() or 0
+
+        offset = (page_no - 1) * page_size
+        query = (
+            select(AuditChainModel)
+            .where(*conditions)
+            .order_by(AuditChainModel.initialized_at.desc())
+            .offset(offset)
+            .limit(page_size)
+        )
+        result = await db.execute(query)
+        chains = result.scalars().all()
+
+        return {
+            "page_no": page_no,
+            "page_size": page_size,
+            "total": total,
+            "has_next": offset + page_size < total,
+            "items": [
+                {
+                    "chain_id": c.chain_id,
+                    "mission_id": c.mission_id,
+                    "agent_id": c.agent_id,
+                    "initialized_at": c.initialized_at,
+                    "closed_at": c.closed_at,
+                    "head_hash": c.head_hash,
+                }
+                for c in chains
+            ],
+        }
+
+
+def _new_id() -> str:
+    from uuid import uuid4
+    return uuid4().hex[:12]
