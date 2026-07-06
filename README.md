@@ -1,90 +1,89 @@
 # OrgKernel
 
 <p align="center">
-  <strong>Enterprise Trust Layer for AI Agents</strong><br/>
-  Cryptographically secure identity, scoped execution, and tamper-evident audit trails —<br/>
+  <strong>The Open-Source Trust Layer for AI Agents</strong><br/>
+  Cryptographic agent identity, scoped execution, and tamper-evident audit trails —<br/>
   transparent by design, not by promise.
 </p>
 
 <p align="center">
-  <a href="https://github.com/MetapriseAI/OrgKernel/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0" />
-  </a>
-  <a href="https://github.com/MetapriseAI/OrgKernel/stargazers">
-    <img src="https://img.shields.io/github/stars/MetapriseAI/OrgKernel?style=flat&color=yellow" alt="GitHub Stars" />
-  </a>
-  <a href="https://github.com/MetapriseAI/OrgKernel/issues">
-    <img src="https://img.shields.io/github/issues/MetapriseAI/OrgKernel" alt="GitHub Issues" />
-  </a>
-  <a href="https://github.com/MetapriseAI/OrgKernel/pulls">
-    <img src="https://img.shields.io/github/issues-pr/MetapriseAI/OrgKernel" alt="Pull Requests" />
-  </a>
+  <a href="https://github.com/MetapriseAI/OrgKernel/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0" /></a>
+  <a href="https://github.com/MetapriseAI/OrgKernel/stargazers"><img src="https://img.shields.io/github/stars/MetapriseAI/OrgKernel?style=flat&color=yellow" alt="GitHub Stars" /></a>
+  <a href="https://github.com/MetapriseAI/OrgKernel/issues"><img src="https://img.shields.io/github/issues/MetapriseAI/OrgKernel" alt="GitHub Issues" /></a>
+  <a href="https://github.com/MetapriseAI/OrgKernel/pulls"><img src="https://img.shields.io/github/issues-pr/MetapriseAI/OrgKernel" alt="Pull Requests" /></a>
   <img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python" alt="Python 3.10+" />
   <img src="https://img.shields.io/badge/FastAPI-supported-009688?logo=fastapi" alt="FastAPI" />
   <img src="https://img.shields.io/badge/PostgreSQL-supported-336791?logo=postgresql" alt="PostgreSQL" />
 </p>
 
 <p align="center">
-  <b>3</b> Core Modules (Phase 1) &nbsp;·&nbsp; <b>27</b> REST Endpoints &nbsp;·&nbsp; <b>5</b> Build Phases &nbsp;·&nbsp; PostgreSQL / MySQL / SQLite Persistence
+  <b>3</b> Core Modules &nbsp;·&nbsp; <b>27</b> REST Endpoints &nbsp;·&nbsp; PostgreSQL / MySQL / SQLite Persistence &nbsp;·&nbsp; Works with LangGraph, CrewAI &amp; AutoGen
 </p>
 
 ---
 
-## Overview
+## The four questions
 
-**OrgKernel** is the security and governance foundation for the AI Agent system. It ensures every agent has a verifiable cryptographic identity, every mission operates within strict boundaries, and every action leaves a tamper-evident audit trail — all without a running AI model.
+Every organization that deploys AI agents eventually asks the same four questions:
 
-Phase 1 delivers the three cryptographic primitives. Phases 2–5 add mission lifecycle, policy engine, authority graph, and tool gateway.
+1. **Who is this agent?** → `AgentIdentity` — a cryptographic credential (Ed25519 keypair) signed by your Org CA
+2. **What can it do?** → `ExecutionToken` — scoped, time-bounded permissions with tool allowlists and parameter bounds
+3. **What did it do?** → `AuditChain` — an append-only, SHA-256 hash-chained execution log
+4. **Who authorized it?** → the organizational authority chain — a verifiable lineage of who granted what
 
-| Capability | Status | Description |
-|---|---|---|
-| **Cryptographic Identity (PKI)** | ✅ Phase 1 | Ed25519 keypairs, Org CA signing, CSR, and challenge-response verification |
-| **Scoped Execution Tokens** | ✅ Phase 1 | Mission-scoped permission tokens with tool allowlists, numeric parameter bounds, and Ed25519 signatures to prevent token grafting |
-| **Hash-Chained Audit Trail** | ✅ Phase 1 | Three-layer audit (IDENTITY / EXECUTION / COMPLIANCE) persisted to PostgreSQL with SHA-256 hash chaining and integrity verification |
-| **Mission Lifecycle** | 🔲 Phase 2 | 8-state mission state machine with enforced transitions |
-| **Tool Gateway** | 🔲 Phase 3 | Token scope enforcement before every external tool call |
-| **Policy Engine** | 🔲 Phase 3 | Declarative policy CRUD with version history and constraint derivation |
-| **Authority Graph** | 🔲 Phase 3 | Org hierarchy traversal, approval level determination, spend authority resolution |
-| **Data Classifier** | 🔲 Phase 3 | Rule-based data classification producing routing tiers and scope constraints |
+Agent frameworks help you *build* and *orchestrate* agents. None of them answer these questions. OrgKernel does — and because it sits in the execution path, it can't be bypassed. Governance is built into the engine, not left to the application developer.
+
+### Authorization is not a boolean — it's a graph
+
+In a real organization, permission is never a single yes/no flag. A mission's execution permission is determined jointly by four layers — **organization**, **department**, **role**, and **instance**. Any layer's denial blocks execution.
+
+Consider an agent that attempts to spend $10,000 to complete a task. The request is blocked — purchasing authority at that amount belongs to the department lead. With OrgKernel, the block is enforced at the token scope check, and the full context (which agent, which mission, what it requested, why it was denied) is already in the audit chain when the department lead asks what happened.
+
+📖 Read the launch announcement: [Introducing OrgKernel](https://blog.metaprise.ai/)
 
 ---
 
-## Build Phases
+## Part of Metaprise AURA
 
-| Phase | Status | Scope |
-|---|---|---|
-| Phase 1 | ✅ Complete | Core primitives: Identity, Token, Audit |
-| Phase 2 | 🔲 Planned | Mission lifecycle with state machine |
-| Phase 3 | 🔲 Planned | Gateway, Policy, Authority, Classifier |
-| Phase 4 | 🔲 Planned | Full DB persistence & version history |
-| Phase 5 | 🔲 Planned | Optimization & Iteration |
+OrgKernel is the open-source trust foundation of [AURA](https://metaprise.ai/aura/aura.html), the execution governance engine of the [Metaprise Enterprise Agent Operating System](https://www.metaprise.ai). Every agent running on Metaprise — across banking, healthcare, insurance, and capital-markets deployments — authenticates, executes, and is audited through OrgKernel primitives.
+
+You don't need Metaprise to use OrgKernel. It's a standalone Apache 2.0 Python library that runs entirely on your own infrastructure — no API key, no phone-home, no vendor lock-in. Inspect every line, audit the cryptography, fork it for your own stack.
+
+---
+
+## What's in the box
+
+| Capability                       | Status       | Description                                                                                                                          |
+| -------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Cryptographic Identity (PKI)** | ✅ Available  | Ed25519 keypairs, Org CA signing, CSR flow, challenge-response verification, full suspend/revoke/reactivate lifecycle                |
+| **Scoped Execution Tokens**      | ✅ Available  | Mission-scoped permission tokens with tool allowlists, immutable & bounded parameters, and Ed25519 signatures to prevent token grafting |
+| **Hash-Chained Audit Trail**     | ✅ Available  | Three-layer audit (IDENTITY / EXECUTION / COMPLIANCE) persisted to PostgreSQL/MySQL/SQLite with SHA-256 hash chaining and integrity verification |
+
+Identity plus execution token together form the **DualToken** model: at execution time an agent presents both its organizational identity credential and an instance-scoped execution token. Both must validate before a tool call proceeds.
+
+Upcoming capabilities (mission lifecycle, tool gateway, policy engine, authority graph, data classifier, SSO/SAML, SCIM) are tracked in the [Roadmap](#roadmap).
+
+---
+
+## Why OrgKernel
+
+| If you use…                        | You get…                                  | What's missing                                          |
+| ---------------------------------- | ------------------------------------------ | -------------------------------------------------------- |
+| LangGraph / CrewAI / AutoGen alone | Agent orchestration                        | No verifiable identity, no scoped authority, no tamper-evident audit |
+| API keys per agent                 | Coarse access control                      | Keys are permanent, unscoped, unauditable, and shareable |
+| Application-level logging          | A log you *hope* is complete               | Logs can be edited or deleted; nothing proves integrity  |
+| **OrgKernel**                      | Identity + scoped authority + audit, enforced in the execution path | —                                        |
+
+Key properties:
+
+- **Enforced, not advisory.** Scope checks run before every tool call. There is no code path around them.
+- **Tamper-evident, not tamper-"proof by promise".** Any deletion, modification, or reordering of audit entries breaks the SHA-256 chain and is detected by the integrity API.
+- **Least privilege by construction.** Tokens carry only the tools and parameter bounds a single mission needs, and they expire.
+- **Compliance-grade evidence.** The audit chain supports full replay of any agent's history and independent third-party verification — designed for the evidentiary requirements of financial, healthcare, and legal deployments.
 
 ---
 
 ## System Architecture
-
-OrgKernel currently orchestrates three services (Phase 1). When Phases 2–5 are complete, the full flow will be: Mission Launch → Approval → Tool Execution → Close/Escalate, with every phase writing to a specific audit layer.
-
-### Complete Flow — Five Phases (Phases 2–5 not yet implemented)
-
-| Phase | Component(s) Called | Audit Layer | Key Behavior |
-|---|---|---|---|
-| **1 Mission Launch** *(Phase 1 available)* | `AgentIdentityService` | L1 Business | Validates agent identity before any operation |
-| **2 State Transition** *(Phase 2 — planned)* | `MissionService.submit()` | L2 Execution | Mission enters approval queue |
-| **3 Triple Review** *(Phase 3 — planned)* | `PolicyEngine` + `AuthorityGraph` + `DataClassifier` | L2 Execution | Constraints frozen into `MissionBoundary`. `ExecutionTokenService.mint()` issues signed token |
-| **4 Tool Execution** *(Phase 3 — planned)* | `ToolGatewayService.validate_tool_call()` | L2 Execution | Five gateway checks on every call: token valid, CA signature correct, agent_id match, tool in scope, tool not forbidden |
-| **5 Mission Close** *(Phase 2 — planned)* | `MissionService.close()` | L2 Execution | Token consumed, state → CLOSED |
-| **6 Escalation** *(Phase 2 — planned)* | `MissionService.escalate()` | L3 Compliance | Only path to L3 audit layer |
-
-### Three-Layer Audit Semantics (Phase 1)
-
-| Audit Layer | Triggered By | Semantics |
-|---|---|---|
-| **L1 Business** | `AuditChainService.initialize()` | Business perspective: who, in which org, for which mission |
-| **L2 Execution** | Every tool call + state transition + approval + close | Execution perspective: every behavior the system performed |
-| **L3 Compliance** | Only `MissionService.escalate()` (Phase 2) | Compliance perspective: what triggered human compliance intervention |
-
-### Architecture Diagram (Phase 1)
 
 ```
 Agent Platform
@@ -123,110 +122,24 @@ Agent Platform
                            |-- detects deletion / tampering / reorder
 ```
 
-### Challenge-Response Authentication (Phase 1)
+### Challenge-Response Authentication
 
-| Step | Party | Action |
-|---|---|---|
-| 1 | Verifier | Calls `AgentIdentityService.request_challenge(agent_id, issued_by)` — generates random nonce + `challenge_id`, stored in memory with 5-minute TTL |
-| 2 | Verifier → Agent | Sends nonce to the target Agent |
-| 3 | Agent | Signs the nonce with its Ed25519 private key, constructs `ChallengeResponse(challenge_id, nonce, public_key, signature)` |
-| 4 | Verifier | Calls `AgentIdentityService.verify_challenge(response)` — validates: nonce one-time use (anti-replay), Ed25519 signature correct, certificate ACTIVE and not expired |
+| Step | Party            | Action                                                                                                                                                               |
+| ---- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | Verifier         | Calls `AgentIdentityService.request_challenge(agent_id, issued_by)` — generates random nonce + `challenge_id`, stored in memory with 5-minute TTL                    |
+| 2    | Verifier → Agent | Sends nonce to the target Agent                                                                                                                                      |
+| 3    | Agent            | Signs the nonce with its Ed25519 private key, constructs `ChallengeResponse(challenge_id, nonce, public_key, signature)`                                             |
+| 4    | Verifier         | Calls `AgentIdentityService.verify_challenge(response)` — validates: nonce one-time use (anti-replay), Ed25519 signature correct, certificate ACTIVE and not expired |
 
 **Attack vectors prevented:** Replay attack (nonce consumed after one use), private key theft (signature must match nonce), Token Grafting (`token.agent_id == caller.agent_id` verified at every scope check).
 
----
+### Three-Layer Audit Semantics
 
-## Core Modules
-
-### Module 01 — Agent Identity ✅ Phase 1
-
-PKI lifecycle management for AI agents. Generates Ed25519 keypairs, issues certificates signed by an Org CA, and manages the full revoke / suspend / reactivate lifecycle.
-
-**Tags:** `Ed25519` `CSR` `Challenge-Response` `Revocation`
-
-### Module 02 — Execution Token ✅ Phase 1
-
-Scoped, time-bounded permission tokens for mission execution. Each token carries a tool allowlist, numeric parameter bounds, and an Ed25519 signature to prevent token grafting attacks.
-
-**Tags:** `Tool Scope` `Bounded Params` `Ed25519 Sig` `Expiry`
-
-### Module 03 — Mission Lifecycle 🔲 Phase 2
-
-8-state mission state machine: `CREATED → PLANNING → WAITING_APPROVAL → APPROVED → PENDING_EXECUTION → IN_PROGRESS → EXECUTED → CLOSED`. Materializes boundaries at approval time.
-
-**Tags:** `8 States` `State Transitions` `Boundary Snapshot` `REST API`
-
-### Module 04 — Tool Gateway 🔲 Phase 3
-
-Enforces token scope before every external tool call. Validates the token signature, checks tool in scope, verifies bounded params, and writes execution audit entries. Prevents Token Grafting attacks at runtime.
-
-**Tags:** `Scope Guard` `Token Grafting Prevention` `Param Bounds` `ALLOWED/BLOCKED/PARTIAL`
-
-### Module 05 — Policy Engine 🔲 Phase 3
-
-Declarative policy CRUD with version history and audit trail. Evaluates rules at mission approval time to derive forbidden tools, time restrictions, spend limits, and dual-approval requirements.
-
-**Tags:** `Policy CRUD` `Version History` `Rule Evaluation` `6 Policy Types`
-
-### Module 06 — Authority Graph 🔲 Phase 3
-
-Org hierarchy traversal and approval level resolution. Maps agents to org units, determines L0-L5 approval requirements, builds multi-step approval chains, and resolves spend authority for mission authorization.
-
-**Tags:** `Org Hierarchy` `L0-L5 Approval` `Spend Authority` `Approval Chain`
-
-### Module 07 — Data Classifier 🔲 Phase 3
-
-Classifies data sources accessed by a mission's tools using rule-based classification. Produces a routing classification (PUBLIC to TOP_SECRET) and data scope constraints for the `MissionBoundary`.
-
-**Tags:** `5 Tiers` `5 Scopes` `Rule Engine` `Data Constraints`
-
-### Module 08 — Audit Chain ✅ Phase 1
-
-Three-layer, hash-chained audit logging persisted to the database. Each layer (IDENTITY, EXECUTION, COMPLIANCE) maintains its own SHA-256 hash chain with integrity verification. REST API exposes chain query and cryptographic integrity checks.
-
-**Tags:** `3 Audit Layers` `SHA-256 Chain` `Integrity Verify` `REST API`
-
----
-
-## Mission 8-State Lifecycle 🔲 Phase 2 (planned)
-
-Every mission follows this state machine once Phase 2 is implemented. Invalid transitions raise `InvalidStateTransitionError`. All transitions are audited via the L2 Execution layer.
-
-### Valid Transitions
-
-| From State | Allowed Transitions | How It Happens |
-|---|---|---|
-| `CREATED` | → `PLANNING` | Only path — set by `launch()` internally |
-| `PLANNING` | → `WAITING_APPROVAL` or → `APPROVED` | `submit()` goes to `WAITING_APPROVAL`; L0 agents can self-approve → `APPROVED` directly |
-| `WAITING_APPROVAL` | → `APPROVED` or → `CLOSED` | `approve()` → `APPROVED`; `reject()` or `close(CANCELLED)` → `CLOSED` |
-| `APPROVED` | → `PENDING_EXECUTION` or → `IN_PROGRESS` | `start_execution()` skips queue → `IN_PROGRESS` directly; otherwise → `PENDING_EXECUTION` |
-| `PENDING_EXECUTION` | → `IN_PROGRESS` or → `WAITING_APPROVAL` or → `CLOSED` | Normal start → `IN_PROGRESS`; rollback → `WAITING_APPROVAL`; `close(CANCELLED)` → `CLOSED` |
-| `IN_PROGRESS` | → `EXECUTED` or → `WAITING_APPROVAL` or → `CLOSED` | `complete_execution()` → `EXECUTED`; rollback → `WAITING_APPROVAL`; `close()` or `escalate()` → `CLOSED` |
-| `EXECUTED` | → `CLOSED` | Only path — `close()` with `SUCCESS` or `FAILED` |
-| `CLOSED` | none | Terminal — no further transitions allowed |
-
-### State Diagram
-
-```
-CREATED --> PLANNING --> WAITING_APPROVAL
-                |              |
-                |         reject/close(CANCELLED)
-                |              |
-                +-----> APPROVED <-----------+
-                (L0 self-approval)           |
-                                 |           |
-                                 v           |
-                        PENDING_EXECUTION    |
-                                 |      rollback
-                                 v           |
-                           IN_PROGRESS ------+
-                                 |
-                                 v
-                            EXECUTED --> CLOSED (terminal)
-
-Escape to CLOSED from: WAITING_APPROVAL, PENDING_EXECUTION, IN_PROGRESS
-Only escalate() writes L3 Compliance — all other CLOSE writes L2
-```
+| Audit Layer       | Triggered By                                          | Semantics                                                            |
+| ----------------- | ----------------------------------------------------- | -------------------------------------------------------------------- |
+| **L1 Business**   | `AuditChainService.initialize()`                      | Business perspective: who, in which org, for which mission           |
+| **L2 Execution**  | Every tool call + state transition + approval + close | Execution perspective: every behavior the system performed           |
+| **L3 Compliance** | Escalation to human compliance review                 | Compliance perspective: what triggered human compliance intervention |
 
 ---
 
@@ -244,14 +157,12 @@ Agents prove identity via Ed25519 challenge-response with one-time nonces. Certi
 
 Every audit entry carries a SHA-256 hash of its content and a `prev_hash` linking to the previous entry. The integrity API recomputes all hashes and detects any deleted, modified, or reordered entries.
 
-### Audit Chain Integrity Checks
-
-| Check | Detects |
-|---|---|
-| Hash present | Hash stripped by attacker |
-| Sequence continuity (IDs increment by 1) | Entry deletion |
-| `prev_hash` linkage | Entry modification or reordering |
-| Content hash match (stored == recomputed SHA-256) | Entry content tampering |
+| Check                                             | Detects                          |
+| ------------------------------------------------- | -------------------------------- |
+| Hash present                                      | Hash stripped by attacker        |
+| Sequence continuity (IDs increment by 1)          | Entry deletion                   |
+| `prev_hash` linkage                               | Entry modification or reordering |
+| Content hash match (stored == recomputed SHA-256) | Entry content tampering          |
 
 ---
 
@@ -259,17 +170,15 @@ Every audit entry carries a SHA-256 hash of its content and a `prev_hash` linkin
 
 ### Install
 
-Requires Python 3.10+. From a local checkout:
+Requires Python 3.10+. Install from source:
 
 ```bash
-cd /path/to/orgkernel
+git clone https://github.com/MetapriseAI/OrgKernel.git
+cd OrgKernel
 pip install -e ".[postgres]"   # postgres | mysql | sqlite
 ```
 
-Database driver extras:
-- `pip install orgkernel[postgres]` — PostgreSQL (recommended)
-- `pip install orgkernel[mysql]` — MySQL / MariaDB
-- `pip install orgkernel[sqlite]` — SQLite for local dev
+Database driver extras: `[postgres]` — PostgreSQL (recommended) · `[mysql]` — MySQL / MariaDB · `[sqlite]` — SQLite for local dev.
 
 ### Service layer
 
@@ -282,7 +191,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from orgkernel.database import async_engine, init_db, get_session_factory
 from orgkernel.services import AgentIdentityService, ExecutionTokenService, AuditChainService
 from orgkernel.schemas import AgentIdentityCSR, ExecutionTokenCreate, ScopeCheckRequest, AuditLayer
-
 
 async def demo(db: AsyncSession) -> None:
     # Configure database
@@ -303,7 +211,7 @@ async def demo(db: AsyncSession) -> None:
     )
     issued = await identity_svc.issue_from_csr(csr)
     print(f"Agent ID: {issued.identity.agent_id}")       # → "aid_7f3k9..."
-    print(f"Private key (returned once): {issued.agent_private_key_pem[:30]}..."
+    print(f"Private key (returned once): {issued.agent_private_key_pem[:30]}...")
 
     # 2. Mint scoped execution token (Ed25519-signed by Org CA)
     token = await token_svc.mint(
@@ -367,22 +275,50 @@ from orgkernel.pyapi.router import router
 
 app = FastAPI(title="Agent Platform powered by OrgKernel")
 
-
 @app.on_event("startup")
 async def startup() -> None:
     async_engine.url = "postgresql+asyncpg://user:pass@localhost:5432/orgkernel"
     await init_db()
-
 
 async def get_db() -> AsyncSession:
     factory = get_session_factory(async_engine)
     async with factory() as session:
         yield session
 
-
 app.include_router(router, prefix="/orgkernel", get_db=get_db)
 # All 27 endpoints under /orgkernel/...
 ```
+
+---
+
+## Using OrgKernel with agent frameworks
+
+OrgKernel is framework-agnostic: it wraps the *tool boundary*, so it works with LangGraph, CrewAI, AutoGen, or any custom agent loop. The pattern is always the same — check scope before the call, append to the audit chain after.
+
+```python
+# Generic tool wrapper — drop into any framework's tool layer
+async def governed_tool_call(db, token_svc, audit_svc, *, token_id, chain_id,
+                             agent_id, mission_id, tool_name, params, tool_fn):
+    check = await token_svc.check_scope(
+        ScopeCheckRequest(token_id=token_id, tool_name=tool_name, params=params)
+    )
+    if not check.passed:
+        await audit_svc.append(db, chain_id=chain_id, layer=AuditLayer.EXECUTION,
+                               event="EXECUTION_tool_blocked", agent_id=agent_id,
+                               mission_id=mission_id, token_id=token_id,
+                               data={"tool": tool_name, "params": params})
+        raise PermissionError(f"{tool_name} blocked by execution token scope")
+
+    result = await tool_fn(**params)
+
+    await audit_svc.append(db, chain_id=chain_id, layer=AuditLayer.EXECUTION,
+                           event="EXECUTION_tool_call", agent_id=agent_id,
+                           mission_id=mission_id, token_id=token_id,
+                           data={"tool": tool_name, "params": params, "result": "success"})
+    return result
+```
+
+With LangGraph, wrap each tool node; with CrewAI, wrap each `Tool`'s `func`; with AutoGen, wrap registered functions. Every agent action becomes identity-bound, scope-checked, and audit-chained without changing your orchestration logic.
 
 ---
 
@@ -392,35 +328,35 @@ All endpoints are prefixed `/orgkernel`. No API key — the server is your own i
 
 ### Endpoint overview
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/orgkernel/identity/csr/submit` | Submit CSR (step 1 of PKI lifecycle) |
-| `POST` | `/orgkernel/identity/issue` | Issue identity from CSR (step 2–3) |
-| `GET` | `/orgkernel/identity/{agent_id}` | Get identity by ID |
-| `GET` | `/orgkernel/identity/{agent_id}/certificate` | Get signed certificate |
-| `POST` | `/orgkernel/identity/verify` | Static verification (status + expiry) |
-| `POST` | `/orgkernel/identity/challenge/request` | Request cryptographic challenge |
-| `POST` | `/orgkernel/identity/challenge/verify` | Verify signed challenge |
-| `POST` | `/orgkernel/identity/{agent_id}/suspend` | Suspend identity |
-| `POST` | `/orgkernel/identity/{agent_id}/reactivate` | Reactivate suspended identity |
-| `POST` | `/orgkernel/identity/{agent_id}/revoke` | Permanently revoke identity |
-| `GET` | `/orgkernel/identity/org/{org_id}` | List all identities for an org |
-| `GET` | `/orgkernel/identity/org/{org_id}/page` | Paginated list by org |
-| `POST` | `/orgkernel/token/mint` | Mint a scoped, time-bounded token |
-| `GET` | `/orgkernel/token/{token_id}` | Get token by ID |
-| `POST` | `/orgkernel/token/scope/check` | Validate a tool call against token scope |
-| `POST` | `/orgkernel/token/{token_id}/use` | Mark token as consumed |
-| `POST` | `/orgkernel/token/{token_id}/invalidate` | Early invalidation with reason |
-| `GET` | `/orgkernel/token/mission/{mission_id}/active` | Get active token for a mission |
-| `GET` | `/orgkernel/token/mission/{mission_id}/page` | Paginated tokens by mission |
-| `GET` | `/orgkernel/token/agent/{agent_id}/page` | Paginated tokens by agent |
-| `POST` | `/orgkernel/audit/initialize` | Initialize a new AuditChain |
-| `POST` | `/orgkernel/audit/{chain_id}/append` | Append an audit entry |
-| `POST` | `/orgkernel/audit/{chain_id}/close` | Close an AuditChain |
-| `GET` | `/orgkernel/audit/mission/{mission_id}` | Get AuditChain by mission_id |
-| `GET` | `/orgkernel/audit/{chain_id}` | Get AuditChain by chain_id |
-| `GET` | `/orgkernel/audit/{chain_id}/verify` | Verify chain integrity |
-| `GET` | `/orgkernel/audit/agent/{agent_id}/page` | Paginated chains by agent |
+| Method | Path                                           | Description                              |
+| ------ | ---------------------------------------------- | ---------------------------------------- |
+| `POST` | `/orgkernel/identity/csr/submit`               | Submit CSR (step 1 of PKI lifecycle)     |
+| `POST` | `/orgkernel/identity/issue`                    | Issue identity from CSR (step 2–3)       |
+| `GET`  | `/orgkernel/identity/{agent_id}`               | Get identity by ID                       |
+| `GET`  | `/orgkernel/identity/{agent_id}/certificate`   | Get signed certificate                   |
+| `POST` | `/orgkernel/identity/verify`                   | Static verification (status + expiry)    |
+| `POST` | `/orgkernel/identity/challenge/request`        | Request cryptographic challenge          |
+| `POST` | `/orgkernel/identity/challenge/verify`         | Verify signed challenge                  |
+| `POST` | `/orgkernel/identity/{agent_id}/suspend`       | Suspend identity                         |
+| `POST` | `/orgkernel/identity/{agent_id}/reactivate`    | Reactivate suspended identity            |
+| `POST` | `/orgkernel/identity/{agent_id}/revoke`        | Permanently revoke identity              |
+| `GET`  | `/orgkernel/identity/org/{org_id}`             | List all identities for an org           |
+| `GET`  | `/orgkernel/identity/org/{org_id}/page`        | Paginated list by org                    |
+| `POST` | `/orgkernel/token/mint`                        | Mint a scoped, time-bounded token        |
+| `GET`  | `/orgkernel/token/{token_id}`                  | Get token by ID                          |
+| `POST` | `/orgkernel/token/scope/check`                 | Validate a tool call against token scope |
+| `POST` | `/orgkernel/token/{token_id}/use`              | Mark token as consumed                   |
+| `POST` | `/orgkernel/token/{token_id}/invalidate`       | Early invalidation with reason           |
+| `GET`  | `/orgkernel/token/mission/{mission_id}/active` | Get active token for a mission           |
+| `GET`  | `/orgkernel/token/mission/{mission_id}/page`   | Paginated tokens by mission              |
+| `GET`  | `/orgkernel/token/agent/{agent_id}/page`       | Paginated tokens by agent                |
+| `POST` | `/orgkernel/audit/initialize`                  | Initialize a new AuditChain              |
+| `POST` | `/orgkernel/audit/{chain_id}/append`           | Append an audit entry                    |
+| `POST` | `/orgkernel/audit/{chain_id}/close`            | Close an AuditChain                      |
+| `GET`  | `/orgkernel/audit/mission/{mission_id}`        | Get AuditChain by mission\_id            |
+| `GET`  | `/orgkernel/audit/{chain_id}`                  | Get AuditChain by chain\_id              |
+| `GET`  | `/orgkernel/audit/{chain_id}/verify`           | Verify chain integrity                   |
+| `GET`  | `/orgkernel/audit/agent/{agent_id}/page`       | Paginated chains by agent                |
 
 ### curl examples
 
@@ -448,14 +384,14 @@ curl -X POST "$BASE/identity/issue" \
     "purpose": "policy-audit"
   }'
 
-# 2. Mint an ExecutionToken
+# 2. Mint an ExecutionToken (set expires_at to a future timestamp)
 curl -X POST "$BASE/token/mint" \
   -H "Content-Type: application/json" \
   -d '{
     "agent_id": "aid_7f3k9...",
     "mission_id": "msn_audit01",
     "execution_scope": ["doc_reader", "email_sender"],
-    "expires_at": "2026-03-26T12:00:00Z"
+    "expires_at": "2027-01-01T12:00:00Z"
   }'
 
 # 3. Enforce scope on every tool call
@@ -492,15 +428,6 @@ curl -X POST "$BASE/audit/ac_xyz.../append" \
 # 6. Verify AuditChain integrity
 curl "$BASE/audit/ac_xyz.../verify"
 # → {"chain_id": "ac_xyz...", "valid": true, "message": "Integrity check passed"}
-
-# 7. Get all identities for an org
-curl "$BASE/identity/org/acme-corp"
-
-# 8. Paginated tokens by mission
-curl "$BASE/token/mission/msn_audit01/page?page_no=1&page_size=20"
-
-# 9. Get full AuditChain
-curl "$BASE/audit/mission/msn_audit01"
 ```
 
 ---
@@ -509,64 +436,73 @@ curl "$BASE/audit/mission/msn_audit01"
 
 ### AgentIdentity
 
-| Field | Type | Description |
-|---|---|---|
-| `agent_id` | string | Unique ID prefixed `aid_`, validated as `^aid_[a-z0-9]+$` |
-| `agent_name` | string | Validated as `^[a-z][a-z0-9_-]*$` — unique per org |
-| `org_id` | string | Organization identifier, validated as `^[a-z][a-z0-9-]*$` |
-| `public_key` | string | Ed25519 public key in Base64url encoding (43-44 chars) |
-| `org_ca_fingerprint` | string | SHA-256 hex fingerprint of Org CA public key (64 chars) |
-| `issued_at`, `valid_until` | datetime | Certificate validity window |
-| `status` | enum | `ACTIVE`, `SUSPENDED`, `REVOKED`, `EXPIRED` |
-| `revoked_at`, `revoked_by`, `revocation_reason` | mixed | Set only when `status = REVOKED` |
+| Field                                           | Type     | Description                                               |
+| ----------------------------------------------- | -------- | --------------------------------------------------------- |
+| `agent_id`                                      | string   | Unique ID prefixed `aid_`, validated as `^aid_[a-z0-9]+$` |
+| `agent_name`                                    | string   | Validated as `^[a-z][a-z0-9_-]*$` — unique per org        |
+| `org_id`                                        | string   | Organization identifier, validated as `^[a-z][a-z0-9-]*$` |
+| `public_key`                                    | string   | Ed25519 public key in Base64url encoding (43-44 chars)    |
+| `org_ca_fingerprint`                            | string   | SHA-256 hex fingerprint of Org CA public key (64 chars)   |
+| `issued_at`, `valid_until`                      | datetime | Certificate validity window                               |
+| `status`                                        | enum     | `ACTIVE`, `SUSPENDED`, `REVOKED`, `EXPIRED`               |
+| `revoked_at`, `revoked_by`, `revocation_reason` | mixed    | Set only when `status = REVOKED`                          |
 
 ### ExecutionToken
 
-| Field | Type | Description |
-|---|---|---|
-| `token_id` | string | Unique ID prefixed `tok_` |
-| `execution_scope` | list[string] | Allowlisted tool names, min 1 item |
-| `immutable_params` | dict | Key=value pairs that must match exactly at call time |
-| `bounded_params` | list[BoundedParam] | Named numeric bounds: `upper_bound` and `lower_bound` per param |
-| `token_signature` | string | Ed25519 EdDSA signature (Base64url, 86-88 chars) over canonical JSON payload |
-| `expires_at` | datetime | Token expiry |
-| `used` | bool | One-time consumption flag |
+| Field              | Type               | Description                                                                  |
+| ------------------ | ------------------ | ---------------------------------------------------------------------------- |
+| `token_id`         | string             | Unique ID prefixed `tok_`                                                    |
+| `execution_scope`  | list[string]       | Allowlisted tool names, min 1 item                                           |
+| `immutable_params` | dict               | Key=value pairs that must match exactly at call time                         |
+| `bounded_params`   | list[BoundedParam] | Named numeric bounds: `upper_bound` and `lower_bound` per param              |
+| `token_signature`  | string             | Ed25519 EdDSA signature (Base64url, 86-88 chars) over canonical JSON payload |
+| `expires_at`       | datetime           | Token expiry                                                                 |
+| `used`             | bool               | One-time consumption flag                                                    |
 
-### MissionBoundary 🔲 Phase 2–3 (planned)
+### Audit Chain — Three-Layer Hash Chain
 
-| Field | Source |
-|---|---|
-| `authority_constraints` | `AuthorityGraphService.resolve_authority()` |
-| `policy_constraints` | `PolicyEngineService.evaluate_for_mission()` |
-| `data_constraints` | `DataClassifierService.classify_for_mission()` |
-| `runtime_constraints` | MissionDefinition + PolicyEngine `max_tool_calls` |
-| `authority_graph_version` | Snapshot version of authority graph at approval |
-| `policy_engine_version` | Snapshot version of policy engine at approval |
-
-### Audit Chain — Three-Layer Hash Chain (Phase 1)
-
-| Layer | Triggered By | Content |
-|---|---|---|
-| **L1 Business** | `AuditChainService.initialize()` | Mission objective, org, agent_id |
-| **L2 Execution** | `AuditChainService.append()` + state transitions + tool calls | Tool name, params, status, violations |
-| **L3 Compliance** | Only `MissionService.escalate()` (Phase 2) | Escalation reason, escalated_to, from_state |
+| Layer             | Triggered By                                                  | Content                                       |
+| ----------------- | ------------------------------------------------------------- | --------------------------------------------- |
+| **L1 Business**   | `AuditChainService.initialize()`                              | Mission objective, org, agent\_id             |
+| **L2 Execution**  | `AuditChainService.append()` + state transitions + tool calls | Tool name, params, status, violations         |
+| **L3 Compliance** | Escalation to human compliance review                         | Escalation reason, escalated\_to, from\_state |
 
 ### Enums
 
 ```
 AgentIdentityStatus:  ACTIVE | SUSPENDED | REVOKED | EXPIRED
-
-MissionState:         CREATED | PLANNING | WAITING_APPROVAL | APPROVED |   ← Phase 2
-                      PENDING_EXECUTION | IN_PROGRESS | EXECUTED | CLOSED
-
-ApprovalLevel:         L0 (no approval) | L1 (self) | L2 (team) |         ← Phase 3
-                       L3 (department) | L4 (executive) | L5 (board/C-level)
-
-ClassificationTier:    PUBLIC | INTERNAL | CONFIDENTIAL | SECRET | TOP_SECRET  ← Phase 3
-
-PolicyType:            TOOL_RESTRICTION | DATA_ACCESS | RATE_LIMIT |          ← Phase 3
-                       SPEND_LIMIT | TIME_RESTRICTION | CUSTOM
 ```
+
+---
+
+## Built for regulated industries
+
+The audit chain is designed to meet evidentiary requirements in financial services, healthcare, insurance, and legal deployments:
+
+- **Full replay** — reconstruct any agent's entire action history from the chain
+- **Selective audit** — query by agent, mission, time range, or action type
+- **External verification** — third-party auditors can independently verify chain integrity without trusting your database
+- **Synchronous writes** — an action does not proceed until its audit entry is committed; no fire-and-forget logging
+
+See how Metaprise applies this in [regional banking](https://metaprise.ai/solutions/banking.html), [healthcare](https://metaprise.ai/solutions/healthcare.html), [insurance](https://metaprise.ai/solutions/insurance.html), and [capital markets](https://metaprise.ai/solutions/capital-markets.html).
+
+---
+
+## Roadmap
+
+The three cryptographic primitives above are production-ready. The following capabilities extend OrgKernel from trust primitives to a full governance kernel:
+
+| Capability            | Scope                                                                                                     |
+| --------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Mission Lifecycle** | 8-state mission state machine (`CREATED → … → CLOSED`) with enforced transitions and boundary snapshots at approval |
+| **Tool Gateway**      | Token scope enforcement in front of every external tool call: token valid, CA signature correct, agent match, tool in scope |
+| **Policy Engine**     | Declarative policy CRUD with version history — forbidden tools, time restrictions, spend limits, dual approval |
+| **Authority Graph**   | Org hierarchy traversal, L0–L5 approval level resolution, spend authority, multi-step approval chains       |
+| **Data Classifier**   | Rule-based classification (PUBLIC → TOP_SECRET) producing routing tiers and data scope constraints          |
+| **SSO / SAML 2.0**    | Enterprise single sign-on — Okta, Azure AD, Ping Identity, OneLogin, any SAML-compliant IdP                 |
+| **SCIM 2.0 Sync**     | Automatic provisioning/deprovisioning — employee joins, moves, or leaves and agent permissions follow       |
+
+Follow [releases](https://github.com/MetapriseAI/OrgKernel/releases) and the [changelog](CHANGELOG.md) for progress.
 
 ---
 
@@ -574,30 +510,21 @@ PolicyType:            TOOL_RESTRICTION | DATA_ACCESS | RATE_LIMIT |          �
 
 We welcome contributions from the community. OrgKernel is the cryptographic trust foundation of an enterprise agent platform — quality and security are paramount.
 
-### How to Contribute
-
 1. **Fork** the repository and create your branch from `main`
 2. **Write tests** for any new functionality
 3. **Ensure** all existing tests pass before submitting
 4. **Document** any new public APIs or modules
 5. **Submit** a Pull Request with a clear description of the change and its motivation
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
 ### Reporting Security Issues
 
-If you discover a security vulnerability, **do not open a public issue**. Please disclose responsibly by emailing [developer@metaprise.ai](mailto:developer@metaprise.ai). We will acknowledge receipt within 48 hours and provide a remediation timeline.
+If you discover a security vulnerability, **do not open a public issue**. Please disclose responsibly by emailing <developer@metaprise.ai>. We will acknowledge receipt within 48 hours and provide a remediation timeline. See [SECURITY.md](SECURITY.md).
 
 ### Reporting Bugs & Feature Requests
 
-Open an [issue](https://github.com/MetapriseAI/OrgKernel/issues) and use the appropriate template. Please include:
-
-- A clear and descriptive title
-- Steps to reproduce (for bugs)
-- Expected vs. actual behavior
-- Environment details (OS, Python version, database version)
-
-### Code of Conduct
-
-All contributors are expected to adhere to our [Code of Conduct](CODE_OF_CONDUCT.md). We are committed to providing a welcoming and inclusive environment for everyone.
+Open an [issue](https://github.com/MetapriseAI/OrgKernel/issues) with a clear title, steps to reproduce (for bugs), expected vs. actual behavior, and environment details (OS, Python version, database version).
 
 ---
 
@@ -609,9 +536,5 @@ OrgKernel is licensed under the **Apache License 2.0**. See [LICENSE](LICENSE) f
 
 ---
 
-<p align="center">
-  Built by <a href="https://www.metaprise.ai">Metaprise</a> &nbsp;·&nbsp;
-  <a href="https://github.com/MetapriseAI/OrgKernel/issues">Issues</a> &nbsp;·&nbsp;
-  <a href="mailto:developer@metaprise.ai">Contact</a><br/>
-  <sub>Python 3.10+ · FastAPI · SQLAlchemy Async · PostgreSQL / MySQL / SQLite</sub>
-</p>
+Built by [Metaprise](https://www.metaprise.ai) · [AURA](https://metaprise.ai/aura/aura.html) · [Issues](https://github.com/MetapriseAI/OrgKernel/issues) · [Contact](mailto:developer@metaprise.ai)
+Python 3.10+ · FastAPI · SQLAlchemy Async · PostgreSQL / MySQL / SQLite
